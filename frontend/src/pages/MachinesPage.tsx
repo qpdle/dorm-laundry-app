@@ -43,7 +43,6 @@ export const MachinesPage = () => {
     }
   };
 
-  // Переключатель для демонстрации сценария администратора
   const toggleStatusByAdmin = (id: number) => {
     setMachines((prev) =>
       prev.map((m) => {
@@ -62,13 +61,22 @@ export const MachinesPage = () => {
   });
 
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 } }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
         <div>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.6rem', sm: '2.1rem' } }}>
             Прачечная общежития
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body2" color="text.secondary">
             Выберите доступную машину для просмотра расписания и записи
           </Typography>
         </div>
@@ -78,14 +86,15 @@ export const MachinesPage = () => {
           exclusive
           onChange={handleFilterChange}
           size="small"
+          sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, display: 'flex' }}
         >
-          <ToggleButton value="all">Все</ToggleButton>
-          <ToggleButton value="washer">Стиралки</ToggleButton>
-          <ToggleButton value="dryer">Сушилки</ToggleButton>
+          <ToggleButton value="all" sx={{ flexGrow: { xs: 1, sm: 0 } }}>Все</ToggleButton>
+          <ToggleButton value="washer" sx={{ flexGrow: { xs: 1, sm: 0 } }}>Стиралки</ToggleButton>
+          <ToggleButton value="dryer" sx={{ flexGrow: { xs: 1, sm: 0 } }}>Сушилки</ToggleButton>
         </ToggleButtonGroup>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, sm: 3 }}>
         {filteredMachines.map((machine) => (
           <Grid size={{ xs: 12, sm: 6, md: 4 }} key={machine.id}>
             <Card
