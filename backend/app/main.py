@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.config import settings
-from app.database import get_db
+from app.database import engine, Base, get_db
+# Импортируем модели, чтобы SQLAlchemy знала их структуру перед вызовом create_all
+from app.models.entities import User, LaundryMachine, Booking
+
+# Создаём все таблицы в базе данных PostgreSQL (если они ещё не созданы)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -26,7 +31,6 @@ def health_check():
 def db_check(db: Session = Depends(get_db)):
     """Проверка доступности и корректности подключения к PostgreSQL."""
     try:
-        # Выполняем проверочный запрос в СУБД
         result = db.execute(text("SELECT version();")).scalar()
         return {
             "status": "connected",
