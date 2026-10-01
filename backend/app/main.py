@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -19,6 +21,26 @@ app = FastAPI(
     description="Backend API для сервиса бронирования прачечной в общежитии",
     version="1.0.0"
 )
+
+
+# Кастомный обработчик ошибок валидации Pydantic
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = []
+    for err in exc.errors():
+        field = " -> ".join(str(loc) for loc in err["loc"] if loc != "body")
+        msg = err["msg"]
+        errors.append({"field": field or "body", "message": msg})
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "status": "error",
+            "error_type": "ValidationError",
+            "message": "Переданы некорректные данные в запросе",
+            "details": errors
+        }
+    )
+
 
 # Подключение роутеров API с префиксом /api
 app.include_router(users_router, prefix="/api")

@@ -11,13 +11,18 @@ router = APIRouter(prefix="/machines", tags=["Machines"])
 
 @router.post("/", response_model=MachineResponse, status_code=status.HTTP_201_CREATED)
 def create_machine_endpoint(machine_in: MachineCreate, db: Session = Depends(get_db)):
-    """Добавить новое оборудование (стиралку или сушилку)."""
+    """Добавить новую единицу оборудования (стиралку или сушилку)."""
     return crud.create_machine(db=db, machine_in=machine_in)
 
 
 @router.get("/", response_model=List[MachineResponse])
 def get_machines_endpoint(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Получить список всех машин."""
+    if skip < 0 or limit <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Параметры пагинации некорректны: skip >= 0, limit > 0"
+        )
     return crud.get_machines(db=db, skip=skip, limit=limit)
 
 
@@ -28,7 +33,7 @@ def get_machine_endpoint(machine_id: int, db: Session = Depends(get_db)):
     if not machine:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Оборудование с id {machine_id} не найдено"
+            detail=f"Оборудование с ID={machine_id} не найдено"
         )
     return machine
 
@@ -40,7 +45,7 @@ def update_machine_endpoint(machine_id: int, machine_in: MachineUpdate, db: Sess
     if not machine:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Оборудование с id {machine_id} не найдено"
+            detail=f"Оборудование с ID={machine_id} не найдено"
         )
     return crud.update_machine(db=db, machine=machine, machine_in=machine_in)
 
@@ -52,7 +57,7 @@ def delete_machine_endpoint(machine_id: int, db: Session = Depends(get_db)):
     if not machine:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Оборудование с id {machine_id} не найдено"
+            detail=f"Невозможно удалить: оборудование с ID={machine_id} не найдено"
         )
     crud.delete_machine(db=db, machine=machine)
     return None

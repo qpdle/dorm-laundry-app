@@ -1,6 +1,9 @@
+from datetime import datetime
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from app.models.entities import User, LaundryMachine, Booking
+from sqlalchemy import and_, or_
+
+from app.models.entities import User, LaundryMachine, Booking, MachineStatus, BookingStatus
 from app.schemas.schemas import (
     UserCreate, UserUpdate,
     MachineCreate, MachineUpdate,
@@ -11,17 +14,21 @@ from app.schemas.schemas import (
 # CRUD ДЛЯ ПОЛЬЗОВАТЕЛЕЙ (USER)
 
 def get_user(db: Session, user_id: int) -> Optional[User]:
-    """Получение одного пользователя по ID."""
     return db.query(User).filter(User.id == user_id).first()
 
 
+def get_user_by_telegram(db: Session, telegram_id: str) -> Optional[User]:
+    """Поиск пользователя по telegram_id для проверки уникальности."""
+    if not telegram_id:
+        return None
+    return db.query(User).filter(User.telegram_id == telegram_id).first()
+
+
 def get_users(db: Session, skip: int = 0, limit: int = 100) -> List[User]:
-    """Получение списка пользователей."""
     return db.query(User).offset(skip).limit(limit).all()
 
 
 def create_user(db: Session, user_in: UserCreate) -> User:
-    """Создание нового пользователя."""
     user = User(
         full_name=user_in.full_name,
         room_number=user_in.room_number,
@@ -34,7 +41,6 @@ def create_user(db: Session, user_in: UserCreate) -> User:
 
 
 def update_user(db: Session, user: User, user_in: UserUpdate) -> User:
-    """Обновление данных пользователя."""
     update_data = user_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(user, field, value)
@@ -44,7 +50,6 @@ def update_user(db: Session, user: User, user_in: UserUpdate) -> User:
 
 
 def delete_user(db: Session, user: User) -> None:
-    """Удаление пользователя."""
     db.delete(user)
     db.commit()
 
@@ -52,17 +57,14 @@ def delete_user(db: Session, user: User) -> None:
 # CRUD ДЛЯ ОБОРУДОВАНИЯ (LAUNDRY MACHINE)
 
 def get_machine(db: Session, machine_id: int) -> Optional[LaundryMachine]:
-    """Получение машины по ID."""
     return db.query(LaundryMachine).filter(LaundryMachine.id == machine_id).first()
 
 
 def get_machines(db: Session, skip: int = 0, limit: int = 100) -> List[LaundryMachine]:
-    """Получение списка оборудования."""
     return db.query(LaundryMachine).offset(skip).limit(limit).all()
 
 
 def create_machine(db: Session, machine_in: MachineCreate) -> LaundryMachine:
-    """Создание новой машины."""
     machine = LaundryMachine(
         name=machine_in.name,
         machine_type=machine_in.machine_type,
@@ -76,7 +78,6 @@ def create_machine(db: Session, machine_in: MachineCreate) -> LaundryMachine:
 
 
 def update_machine(db: Session, machine: LaundryMachine, machine_in: MachineUpdate) -> LaundryMachine:
-    """Обновление параметров машины."""
     update_data = machine_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(machine, field, value)
@@ -86,7 +87,6 @@ def update_machine(db: Session, machine: LaundryMachine, machine_in: MachineUpda
 
 
 def delete_machine(db: Session, machine: LaundryMachine) -> None:
-    """Удаление машины."""
     db.delete(machine)
     db.commit()
 
@@ -94,17 +94,36 @@ def delete_machine(db: Session, machine: LaundryMachine) -> None:
 # CRUD ДЛЯ БРОНИРОВАНИЙ (BOOKING)
 
 def get_booking(db: Session, booking_id: int) -> Optional[Booking]:
-    """Получение бронирования по ID."""
     return db.query(Booking).filter(Booking.id == booking_id).first()
 
 
 def get_bookings(db: Session, skip: int = 0, limit: int = 100) -> List[Booking]:
-    """Получение списка бронирований."""
     return db.query(Booking).offset(skip).limit(limit).all()
 
 
+def check_machine_overlap(
+    db: Session,
+    machine_id: int,
+    start_time: datetime,
+    end_time: datetime,
+    exclude_booking_id: Optional[int] = None
+) -> Optional[Booking]:
+    """
+    Проверяет, пересекается ли запрошенный слот со временем уже существующих активных бронирований.
+    Два интервала [A, B] и [C, D] пересекаются, если A < D и B > C.
+    """
+    query = db.query(Booking).filter(
+        Booking.machine_id == machine_id,
+        Booking.status == BookingStatus.ACTIVE,
+        Booking.start_time < end_time,
+        Booking.end_time > start_time
+    )
+    if exclude_booking_id:
+        query = query.filter(Booking.id != exclude_booking_id)
+    return query.first()
+
+
 def create_booking(db: Session, booking_in: BookingCreate) -> Booking:
-    """Создание бронирования."""
     booking = Booking(
         user_id=booking_in.user_id,
         machine_id=booking_in.machine_id,
@@ -119,7 +138,6 @@ def create_booking(db: Session, booking_in: BookingCreate) -> Booking:
 
 
 def update_booking(db: Session, booking: Booking, booking_in: BookingUpdate) -> Booking:
-    """Обновление параметров бронирования."""
     update_data = booking_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(booking, field, value)
@@ -129,6 +147,5 @@ def update_booking(db: Session, booking: Booking, booking_in: BookingUpdate) -> 
 
 
 def delete_booking(db: Session, booking: Booking) -> None:
-    """Удаление бронирования."""
     db.delete(booking)
     db.commit()
