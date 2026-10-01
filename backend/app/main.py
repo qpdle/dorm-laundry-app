@@ -4,10 +4,14 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import engine, Base, get_db
-# Импортируем модели, чтобы SQLAlchemy знала их структуру перед вызовом create_all
 from app.models.entities import User, LaundryMachine, Booking
 
-# Создаём все таблицы в базе данных PostgreSQL (если они ещё не созданы)
+# Импорт маршрутов
+from app.api.users import router as users_router
+from app.api.machines import router as machines_router
+from app.api.bookings import router as bookings_router
+
+# Создаём таблицы в базе данных (если ещё не созданы)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -15,6 +19,11 @@ app = FastAPI(
     description="Backend API для сервиса бронирования прачечной в общежитии",
     version="1.0.0"
 )
+
+# Подключение роутеров API с префиксом /api
+app.include_router(users_router, prefix="/api")
+app.include_router(machines_router, prefix="/api")
+app.include_router(bookings_router, prefix="/api")
 
 
 @app.get("/", tags=["Root"])
@@ -29,7 +38,7 @@ def health_check():
 
 @app.get("/api/db-check", tags=["Health"])
 def db_check(db: Session = Depends(get_db)):
-    """Проверка доступности и корректности подключения к PostgreSQL."""
+    """Проверка подключения к PostgreSQL."""
     try:
         result = db.execute(text("SELECT version();")).scalar()
         return {
