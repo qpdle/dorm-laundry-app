@@ -17,6 +17,12 @@ interface LoginPageProps {
   onLogout: () => void;
 }
 
+interface FormErrors {
+  fullName?: string;
+  roomNumber?: string;
+  telegramId?: string;
+}
+
 export const LoginPage: React.FC<LoginPageProps> = ({
   currentUser,
   onLogin,
@@ -25,12 +31,55 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [fullName, setFullName] = useState<string>('');
   const [roomNumber, setRoomNumber] = useState<string>('');
   const [telegramId, setTelegramId] = useState<string>('');
-  const [successMessage, setSuccessMessage] = useState<string>('');
+  
+  // Состояние ошибок валидации
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Валидация полей
+  const validate = (): boolean => {
+    const newErrors: FormErrors = {};
+
+    // 1. Валидация ФИО
+    const cleanName = fullName.trim();
+    if (!cleanName) {
+      newErrors.fullName = 'Введите имя и фамилию';
+    } else if (cleanName.length < 3) {
+      newErrors.fullName = 'ФИО должно содержать не менее 3 символов';
+    } else if (!/^[a-zA-Zа-яА-ЯёЁ\s-]+$/.test(cleanName)) {
+      newErrors.fullName = 'ФИО может содержать только буквы, пробелы и дефис';
+    }
+
+    // 2. Валидация номера комнаты
+    const cleanRoom = roomNumber.trim();
+    if (!cleanRoom) {
+      newErrors.roomNumber = 'Укажите номер комнаты в общежитии';
+    } else if (cleanRoom.length > 10) {
+      newErrors.roomNumber = 'Номер комнаты слишком длинный (до 10 символов)';
+    }
+
+    // 3. Валидация Telegram
+    const cleanTg = telegramId.trim();
+    if (cleanTg) {
+      if (!cleanTg.startsWith('@')) {
+        newErrors.telegramId = 'Никнейм должен начинаться с символа @';
+      } else if (cleanTg.length < 4) {
+        newErrors.telegramId = 'Telegram никнейм слишком короткий (минимум @abc)';
+      } else if (!/^@[a-zA-Z0-9_]+$/.test(cleanTg)) {
+        newErrors.telegramId = 'Разрешены только латинские буквы, цифры и символ _';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setSubmitError(null);
 
-    if (!fullName.trim() || !roomNumber.trim()) {
+    if (!validate()) {
+      setSubmitError('Пожалуйста, исправьте ошибки в заполненных полях');
       return;
     }
 
@@ -43,7 +92,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     };
 
     onLogin(newUser);
-    setSuccessMessage(`Успешный вход! Добро пожаловать, ${newUser.full_name}`);
   };
 
   if (currentUser) {
@@ -95,30 +143,38 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </Typography>
         </Box>
 
-        {successMessage && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {successMessage}
+        {submitError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {submitError}
           </Alert>
         )}
 
-        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Box component="form" onSubmit={handleSubmit} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
-            label="ФИО студента"
+            label="ФИО студента *"
             variant="outlined"
             fullWidth
-            required
             value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
+            onChange={(e) => {
+              setFullName(e.target.value);
+              if (errors.fullName) setErrors({ ...errors, fullName: undefined });
+            }}
+            error={Boolean(errors.fullName)}
+            helperText={errors.fullName}
             placeholder="Иван Иванов"
           />
 
           <TextField
-            label="Номер комнаты"
+            label="Номер комнаты *"
             variant="outlined"
             fullWidth
-            required
             value={roomNumber}
-            onChange={(e) => setRoomNumber(e.target.value)}
+            onChange={(e) => {
+              setRoomNumber(e.target.value);
+              if (errors.roomNumber) setErrors({ ...errors, roomNumber: undefined });
+            }}
+            error={Boolean(errors.roomNumber)}
+            helperText={errors.roomNumber}
             placeholder="314-А"
           />
 
@@ -127,9 +183,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             variant="outlined"
             fullWidth
             value={telegramId}
-            onChange={(e) => setTelegramId(e.target.value)}
+            onChange={(e) => {
+              setTelegramId(e.target.value);
+              if (errors.telegramId) setErrors({ ...errors, telegramId: undefined });
+            }}
+            error={Boolean(errors.telegramId)}
+            helperText={errors.telegramId || 'Например, @ivan_dorm (необязательно)'}
             placeholder="@ivan_dorm"
-            helperText="Для получения напоминаний о стирке"
           />
 
           <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 1 }}>

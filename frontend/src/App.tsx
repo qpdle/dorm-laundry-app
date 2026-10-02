@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CssBaseline, Box, Snackbar, Alert } from '@mui/material';
 import { Navbar } from './shared/ui/Navbar';
-import { MachinesPage } from './pages/MachinesPage/MachinesPage';
+import { MachinesPage } from './pages/MachinesPage/MachinesPage.tsx';
 import { SchedulePage } from './pages/SchedulePage/SchedulePage';
 import { MyBookingsPage } from './pages/MyBookingsPage/MyBookingsPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
