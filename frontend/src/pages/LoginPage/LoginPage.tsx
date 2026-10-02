@@ -7,6 +7,7 @@ import {
   Button,
   Box,
   Alert,
+  Collapse,
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import type { User } from '../../shared/types';
@@ -32,15 +33,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [roomNumber, setRoomNumber] = useState<string>('');
   const [telegramId, setTelegramId] = useState<string>('');
   
-  // Состояние ошибок валидации
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Валидация полей
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
 
-    // 1. Валидация ФИО
     const cleanName = fullName.trim();
     if (!cleanName) {
       newErrors.fullName = 'Введите имя и фамилию';
@@ -50,7 +48,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       newErrors.fullName = 'ФИО может содержать только буквы, пробелы и дефис';
     }
 
-    // 2. Валидация номера комнаты
     const cleanRoom = roomNumber.trim();
     if (!cleanRoom) {
       newErrors.roomNumber = 'Укажите номер комнаты в общежитии';
@@ -58,7 +55,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       newErrors.roomNumber = 'Номер комнаты слишком длинный (до 10 символов)';
     }
 
-    // 3. Валидация Telegram
     const cleanTg = telegramId.trim();
     if (cleanTg) {
       if (!cleanTg.startsWith('@')) {
@@ -97,7 +93,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   if (currentUser) {
     return (
       <Container maxWidth="xs" sx={{ py: 8 }}>
-        <Paper variant="outlined" sx={{ p: 4, borderRadius: 3, textAlign: 'center' }}>
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            textAlign: 'center',
+            transition: 'box-shadow 0.3s ease',
+            '&:hover': { boxShadow: 4 },
+          }}
+        >
           <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2 }}>
             Профиль студента
           </Typography>
@@ -122,7 +127,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   return (
     <Container maxWidth="xs" sx={{ py: 8 }}>
-      <Paper variant="outlined" sx={{ p: 4, borderRadius: 3 }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 4,
+          borderRadius: 3,
+          boxShadow: 2,
+          transition: 'box-shadow 0.3s ease',
+          '&:hover': { boxShadow: 5 },
+        }}
+      >
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
           <Box
             sx={{
@@ -131,6 +145,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               bgcolor: 'primary.light',
               color: 'primary.main',
               mb: 1,
+              transition: 'transform 0.3s ease',
+              '&:hover': { transform: 'rotate(15deg) scale(1.1)' },
             }}
           >
             <LockOutlinedIcon />
@@ -143,11 +159,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </Typography>
         </Box>
 
-        {submitError && (
+        {/* Анимация плавного выезда сообщения об ошибке */}
+        <Collapse in={Boolean(submitError)}>
           <Alert severity="error" sx={{ mb: 2 }}>
             {submitError}
           </Alert>
-        )}
+        </Collapse>
 
         <Box component="form" onSubmit={handleSubmit} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
@@ -192,7 +209,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             placeholder="@ivan_dorm"
           />
 
-          <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 1 }}>
+          <Button
+            type="submit"
+            variant="contained"
+            size="large"
+            fullWidth
+            sx={{
+              mt: 1,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
             Войти в систему
           </Button>
         </Box>
@@ -200,3 +227,5 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     </Container>
   );
 };
+
+export default LoginPage;

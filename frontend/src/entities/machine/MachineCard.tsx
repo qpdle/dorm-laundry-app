@@ -25,7 +25,21 @@ export const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) =
   const isAvailable = machine.status === 'available';
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Card
+      variant="outlined"
+      sx={{
+        borderRadius: 3,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        // Плавная анимация подъёма и тени
+        transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+        '&:hover': {
+          transform: isAvailable ? 'translateY(-6px)' : 'none',
+          boxShadow: isAvailable ? 6 : 1,
+        },
+      }}
+    >
       <CardContent sx={{ flexGrow: 1 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -59,6 +73,10 @@ export const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) =
               fullWidth
               disabled={!isAvailable}
               onClick={() => onSelect(machine)}
+              sx={{
+                transition: 'transform 0.15s ease',
+                '&:active': { transform: 'scale(0.98)' },
+              }}
             >
               {isAvailable ? 'Выбрать время' : 'Недоступна'}
             </Button>
@@ -68,3 +86,5 @@ export const MachineCard: React.FC<MachineCardProps> = ({ machine, onSelect }) =
     </Card>
   );
 };
+
+export default MachineCard;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Typography, Box, Button } from '@mui/material';
+import { Container, Typography, Box, Button, Grow } from '@mui/material';
 import { MachineCard } from '../../entities/machine/MachineCard';
 import { MachineFilters } from '../../features/filter-machines/MachineFilters';
 import { LoadingState } from '../../shared/ui/LoadingState';
@@ -26,7 +26,6 @@ export const MachinesPage: React.FC<MachinesPageProps> = ({ onSelectMachine }) =
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [floorFilter, setFloorFilter] = useState<number | 'all'>('all');
 
-  // Имитация асинхронного сетевого запроса к бэкенду
   const loadMachinesData = (simulateError: boolean = false) => {
     setIsLoading(true);
     setErrorMessage(null);
@@ -39,7 +38,7 @@ export const MachinesPage: React.FC<MachinesPageProps> = ({ onSelectMachine }) =
         setMachines(mockMachines);
         setIsLoading(false);
       }
-    }, 700);
+    }, 600);
   };
 
   useEffect(() => {
@@ -69,7 +68,6 @@ export const MachinesPage: React.FC<MachinesPageProps> = ({ onSelectMachine }) =
           </Typography>
         </Box>
 
-        {/* Кнопка демонстрации состояния ошибки для отчёта */}
         <Button
           variant="outlined"
           color="warning"
@@ -91,7 +89,7 @@ export const MachinesPage: React.FC<MachinesPageProps> = ({ onSelectMachine }) =
       {/* 2. Состояние загрузки */}
       {isLoading && <LoadingState message="Получение актуального статуса оборудования..." />}
 
-      {/* 3. Основной контент при успешной загрузке */}
+      {/* 3. Каталог машин */}
       {!isLoading && !errorMessage && (
         <>
           <MachineFilters
@@ -101,7 +99,6 @@ export const MachinesPage: React.FC<MachinesPageProps> = ({ onSelectMachine }) =
             onFloorChange={setFloorFilter}
           />
 
-          {/* Состояние отсутствия данных (когда фильтры дали пустой результат) */}
           {filteredMachines.length === 0 ? (
             <EmptyState
               title="Машины не найдены"
@@ -121,10 +118,17 @@ export const MachinesPage: React.FC<MachinesPageProps> = ({ onSelectMachine }) =
                 gap: 3,
               }}
             >
-              {filteredMachines.map((machine) => (
-                <Box key={machine.id}>
-                  <MachineCard machine={machine} onSelect={onSelectMachine} />
-                </Box>
+              {filteredMachines.map((machine, index) => (
+                <Grow
+                  key={machine.id}
+                  in={true}
+                  style={{ transformOrigin: '0 0 0' }}
+                  timeout={Math.min((index + 1) * 200, 1000)}
+                >
+                  <Box>
+                    <MachineCard machine={machine} onSelect={onSelectMachine} />
+                  </Box>
+                </Grow>
               ))}
             </Box>
           )}
@@ -133,3 +137,5 @@ export const MachinesPage: React.FC<MachinesPageProps> = ({ onSelectMachine }) =
     </Container>
   );
 };
+
+export default MachinesPage;
