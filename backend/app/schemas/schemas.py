@@ -81,6 +81,16 @@ class UserResponse(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# Схемы для токенов аутентификации (JWT)
+
+class TokenResponse(BaseModel):
+    access_token: str = Field(..., description="JWT токен доступа к защищенному API")
+    refresh_token: str = Field(..., description="JWT токен для продления access token")
+    token_type: str = Field(default="bearer", description="Тип авторизационного заголовка")
+    expires_in: int = Field(..., description="Срок действия access token в секундах")
+    user: UserResponse = Field(..., description="Данные аутентифицированного пользователя")
+
+
 # Схемы для оборудования (Laundry Machine)
 
 class MachineBase(BaseModel):

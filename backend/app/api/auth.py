@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.config import settings
+from app.core.security import create_access_token, create_refresh_token
 from app.database import get_db
-from app.schemas.schemas import UserRegister, UserLogin, UserResponse
+from app.schemas.schemas import UserRegister, UserLogin, UserResponse, TokenResponse
 from app.services import crud
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -28,9 +30,9 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
     return crud.create_registered_user(db=db, user_in=user_in)
 
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login", response_model=TokenResponse)
 def login_user(login_in: UserLogin, db: Session = Depends(get_db)):
-    """Вход пользователя с валидацией пароля по сохранённому хешу."""
+    """Вход пользователя с выдачей двух токенов: access_token и refresh_token."""
     # Нормализуем логин (добавляем @, если пользователь не указал)
     login_id = login_in.telegram_id.strip()
     if not login_id.startswith("@"):
@@ -44,4 +46,14 @@ def login_user(login_in: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return user
+    # Генерируем два токена с заданными сроками жизни
+    access_token = create_access_token(subject=user.id)
+    refresh_token = create_refresh_token(subject=user.id)
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=user,
+    )
