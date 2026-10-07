@@ -8,18 +8,19 @@ from app.config import settings
 from app.database import engine, Base, get_db
 from app.models.entities import User, LaundryMachine, Booking
 
-# Импорт маршрутов
+# Импорт маршрутов API
+from app.api.auth import router as auth_router
 from app.api.users import router as users_router
 from app.api.machines import router as machines_router
 from app.api.bookings import router as bookings_router
 
-# Создаём таблицы в базе данных (если ещё не созданы)
+# Создание таблиц в базе данных
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Backend API для сервиса бронирования прачечной в общежитии",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 
@@ -37,12 +38,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "status": "error",
             "error_type": "ValidationError",
             "message": "Переданы некорректные данные в запросе",
-            "details": errors
-        }
+            "details": errors,
+        },
     )
 
 
-# Подключение роутеров API с префиксом /api
+# Регистрация роутеров API с префиксом /api
+app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(machines_router, prefix="/api")
 app.include_router(bookings_router, prefix="/api")
@@ -50,26 +52,28 @@ app.include_router(bookings_router, prefix="/api")
 
 @app.get("/", tags=["Root"])
 def root():
+    """Корневой эндпоинт проверки доступности."""
     return {"message": "Добро пожаловать в API DormLaundry!"}
 
 
 @app.get("/api/health", tags=["Health"])
 def health_check():
+    """Эндпоинт проверки статуса работы backend."""
     return {"status": "ok", "message": "DormLaundry backend is running"}
 
 
 @app.get("/api/db-check", tags=["Health"])
 def db_check(db: Session = Depends(get_db)):
-    """Проверка подключения к PostgreSQL."""
+    """Проверка активного подключения к PostgreSQL."""
     try:
         result = db.execute(text("SELECT version();")).scalar()
         return {
             "status": "connected",
             "database": settings.DB_NAME,
-            "postgres_version": result
+            "postgres_version": result,
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка подключения к базе данных: {str(e)}"
+            detail=f"Ошибка подключения к базе данных: {str(e)}",
         )

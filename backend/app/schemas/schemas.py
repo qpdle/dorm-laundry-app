@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from app.models.entities import MachineType, MachineStatus, BookingStatus
 
 
-# СХЕМЫ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ (USER)
+# Схемы для пользователей (User)
 
 class UserBase(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100, description="ФИО студента")
@@ -43,6 +43,22 @@ class UserCreate(UserBase):
     pass
 
 
+class UserRegister(UserBase):
+    password: str = Field(..., min_length=6, max_length=100, description="Пароль пользователя")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v.strip()) < 6:
+            raise ValueError("Пароль должен содержать минимум 6 символов")
+        return v
+
+
+class UserLogin(BaseModel):
+    telegram_id: str = Field(..., description="Telegram-логин пользователя")
+    password: str = Field(..., description="Пароль пользователя")
+
+
 class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     room_number: Optional[str] = Field(None, min_length=1, max_length=20)
@@ -65,7 +81,7 @@ class UserResponse(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# СХЕМЫ ДЛЯ ОБОРУДОВАНИЯ (LAUNDRY MACHINE)
+# Схемы для оборудования (Laundry Machine)
 
 class MachineBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=50, description="Название машины")
@@ -100,7 +116,7 @@ class MachineResponse(MachineBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# СХЕМЫ ДЛЯ БРОНИРОВАНИЙ (BOOKING)
+# Схемы для бронирований (Booking)
 
 class BookingBase(BaseModel):
     user_id: int = Field(..., gt=0, description="ID пользователя")
@@ -114,7 +130,7 @@ class BookingBase(BaseModel):
         start = self.start_time
         end = self.end_time
 
-        # Приводим к naive datetime если есть tzinfo для корректного сравнения
+        # Приводим к naive datetime без часового пояса для корректного сравнения
         if start.tzinfo is not None:
             start = start.replace(tzinfo=None)
         if end.tzinfo is not None:
