@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import jwt
 from passlib.context import CryptContext
 
@@ -43,3 +43,8 @@ def create_refresh_token(subject: str | int) -> str:
         "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_token(token: str) -> Dict[str, Any]:
+    """Декодирование и верификация криптографической подписи JWT токена."""
+    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

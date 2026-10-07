@@ -91,6 +91,16 @@ class TokenResponse(BaseModel):
     user: UserResponse = Field(..., description="Данные аутентифицированного пользователя")
 
 
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str = Field(..., description="Действующий refresh token")
+
+
+class TokenRefreshResponse(BaseModel):
+    access_token: str = Field(..., description="Новый JWT токен доступа")
+    token_type: str = Field(default="bearer", description="Тип токена")
+    expires_in: int = Field(..., description="Срок действия нового access token в секундах")
+
+
 # Схемы для оборудования (Laundry Machine)
 
 class MachineBase(BaseModel):

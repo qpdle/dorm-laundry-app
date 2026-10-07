@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -42,8 +42,24 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=get_utc_now, nullable=False)
 
-    # Связь один-ко-многим с бронированиями
+    # Связи один-ко-многим
     bookings = relationship("Booking", back_populates="user", cascade="all, delete-orphan")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+
+
+class RefreshToken(Base):
+    """Модель хранения выданных refresh токенов для валидации и отзыва."""
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(500), unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    revoked = Column(Boolean, default=False, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+
+    # Связь с пользователем
+    user = relationship("User", back_populates="refresh_tokens")
 
 
 class LaundryMachine(Base):

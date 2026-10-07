@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.core.security import get_password_hash, verify_password
-from app.models.entities import User, LaundryMachine, Booking, MachineStatus, BookingStatus
+from app.models.entities import User, LaundryMachine, Booking, RefreshToken, MachineStatus, BookingStatus
 from app.schemas.schemas import (
     UserCreate, UserUpdate, UserRegister,
     MachineCreate, MachineUpdate,
@@ -84,6 +84,37 @@ def delete_user(db: Session, user: User) -> None:
     """Удаление пользователя из БД."""
     db.delete(user)
     db.commit()
+
+
+# Операции для Refresh токенов (RefreshToken)
+
+def save_refresh_token(db: Session, user_id: int, token: str, expires_at: datetime) -> RefreshToken:
+    """Сохранение выданного refresh токена в базу данных."""
+    db_token = RefreshToken(
+        token=token,
+        user_id=user_id,
+        expires_at=expires_at,
+        revoked=False
+    )
+    db.add(db_token)
+    db.commit()
+    db.refresh(db_token)
+    return db_token
+
+
+def get_refresh_token(db: Session, token: str) -> Optional[RefreshToken]:
+    """Поиск refresh токена в базе данных."""
+    return db.query(RefreshToken).filter(RefreshToken.token == token).first()
+
+
+def revoke_refresh_token(db: Session, token: str) -> bool:
+    """Отзыв refresh токена."""
+    db_token = get_refresh_token(db, token=token)
+    if db_token:
+        db_token.revoked = True
+        db.commit()
+        return True
+    return False
 
 
 # Операции для оборудования (Laundry Machine)

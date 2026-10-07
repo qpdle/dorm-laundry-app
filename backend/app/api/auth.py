@@ -1,10 +1,19 @@
+from datetime import datetime, timezone
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.database import get_db
-from app.schemas.schemas import UserRegister, UserLogin, UserResponse, TokenResponse
+from app.schemas.schemas import (
+    UserRegister,
+    UserLogin,
+    UserResponse,
+    TokenResponse,
+    TokenRefreshRequest,
+    TokenRefreshResponse,
+)
 from app.services import crud
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -33,7 +42,6 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login_user(login_in: UserLogin, db: Session = Depends(get_db)):
     """Вход пользователя с выдачей двух токенов: access_token и refresh_token."""
-    # Нормализуем логин (добавляем @, если пользователь не указал)
     login_id = login_in.telegram_id.strip()
     if not login_id.startswith("@"):
         login_id = f"@{login_id}"
@@ -46,9 +54,16 @@ def login_user(login_in: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Генерируем два токена с заданными сроками жизни
+    # Генерация токенов
     access_token = create_access_token(subject=user.id)
     refresh_token = create_refresh_token(subject=user.id)
+
+    # Декодируем срок действия для сохранения в БД
+    payload = decode_token(refresh_token)
+    expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc).replace(tzinfo=None)
+
+    # Сохраняем refresh_token в БД
+    crud.save_refresh_token(db=db, user_id=user.id, token=refresh_token, expires_at=expires_at)
 
     return TokenResponse(
         access_token=access_token,
@@ -56,4 +71,63 @@ def login_user(login_in: UserLogin, db: Session = Depends(get_db)):
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user=user,
+    )
+
+
+@router.post("/refresh", response_model=TokenRefreshResponse)
+def refresh_access_token(refresh_in: TokenRefreshRequest, db: Session = Depends(get_db)):
+    """Обновление access token по действующему refresh token с валидацией отказов."""
+    token_str = refresh_in.refresh_token
+
+    # 1. Проверка структуры, подписи и срока годности токена
+    try:
+        payload = decode_token(token_str)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Срок действия refresh токена истёк. Пожалуйста, выполните повторный вход.",
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Некорректный refresh токен.",
+        )
+
+    # 2. Проверка назначения токена (должен быть именно refresh, а не access)
+    if payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Переданный токен не является refresh токеном.",
+        )
+
+    # 3. Проверка статуса токена в базе данных (отозван или отсутствует)
+    db_token = crud.get_refresh_token(db=db, token=token_str)
+    if not db_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh токен не найден в системе.",
+        )
+
+    if db_token.revoked:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Данный refresh токен был отозван. Доступ запрещён.",
+        )
+
+    # 4. Проверка существования пользователя
+    user_id = int(payload.get("sub"))
+    user = crud.get_user(db=db, user_id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь не найден.",
+        )
+
+    # 5. Выпуск нового access токена
+    new_access_token = create_access_token(subject=user.id)
+
+    return TokenRefreshResponse(
+        access_token=new_access_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
