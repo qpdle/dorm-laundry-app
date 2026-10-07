@@ -4,6 +4,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.models.entities import MachineType, MachineStatus, BookingStatus
 
 
+# Базовые вспомогательные схемы
+
+class MessageResponse(BaseModel):
+    message: str = Field(..., description="Информационное сообщение от сервера")
+
+
 # Схемы для пользователей (User)
 
 class UserBase(BaseModel):
@@ -168,7 +174,7 @@ class BookingBase(BaseModel):
 
 
 class BookingCreate(BookingBase):
-    # user_id опционален в теле запроса, так как он берётся из JWT токена
+    # user_id подставляется сервером из JWT токена
     user_id: Optional[int] = Field(None, gt=0, description="ID пользователя (подставляется сервером)")
 
 

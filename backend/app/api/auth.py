@@ -15,6 +15,7 @@ from app.schemas.schemas import (
     TokenResponse,
     TokenRefreshRequest,
     TokenRefreshResponse,
+    MessageResponse,
 )
 from app.services import crud
 
@@ -133,6 +134,22 @@ def refresh_access_token(refresh_in: TokenRefreshRequest, db: Session = Depends(
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
+
+
+@router.post("/logout", response_model=MessageResponse)
+def logout_user(refresh_in: TokenRefreshRequest, db: Session = Depends(get_db)):
+    """Выход из приложения: отзыв refresh токена текущей сессии для прекращения возможности продления."""
+    token_str = refresh_in.refresh_token
+
+    # Отзываем refresh токен в базе данных
+    revoked = crud.revoke_refresh_token(db=db, token=token_str)
+    if not revoked:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Указанный refresh токен не найден в системе.",
+        )
+
+    return MessageResponse(message="Выход успешно выполнен. Refresh токен аннулирован.")
 
 
 @router.get("/me", response_model=UserResponse)

@@ -6,6 +6,7 @@ import { SchedulePage } from './pages/SchedulePage/SchedulePage';
 import { MyBookingsPage } from './pages/MyBookingsPage/MyBookingsPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
 import type { LaundryMachine, Booking, User } from './shared/types';
+import { getRefreshToken, clearTokens } from './shared/lib/authStorage';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<string>('catalog');
@@ -13,9 +14,9 @@ export function App() {
 
   const [currentUser, setCurrentUser] = useState<User | null>({
     id: 1,
-    full_name: 'Иван Иванов',
-    room_number: '402-Б',
-    telegram_id: '@ivan_dorm',
+    full_name: 'Даниил Орлов',
+    room_number: '314-А',
+    telegram_id: '@orlov_daniil',
     created_at: new Date().toISOString(),
   });
 
@@ -41,11 +42,13 @@ export function App() {
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Выбор стиральной машины и открытие страницы расписания
   const handleSelectMachine = (machine: LaundryMachine) => {
     setSelectedMachine(machine);
     setCurrentTab('schedule');
   };
 
+  // Бронирование слота
   const handleBookSlot = (machineId: number, startTime: string, endTime: string) => {
     const newBooking: Booking = {
       id: Date.now(),
@@ -63,6 +66,7 @@ export function App() {
     setCurrentTab('my-bookings');
   };
 
+  // Отмена бронирования
   const handleCancelBooking = (bookingId: number) => {
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' as const } : b))
@@ -70,10 +74,31 @@ export function App() {
     setToastMessage('Бронирование отменено');
   };
 
+  // Выход из системы: отзыв токена на сервере, очистка хранилища и сброс состояния пользователя
+  const handleLogout = async () => {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      } catch (error) {
+        console.warn('Сервер недоступен при выходе, сессия завершена локально', error);
+      }
+    }
+
+    clearTokens();
+    setCurrentUser(null);
+    setToastMessage('Вы успешно вышли из системы');
+    setCurrentTab('login');
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <CssBaseline />
-      
+
       {/* Навигационная панель */}
       <Navbar
         currentTab={currentTab === 'schedule' ? 'catalog' : currentTab}
@@ -81,9 +106,11 @@ export function App() {
           setSelectedMachine(null);
           setCurrentTab(tab);
         }}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
-      {/* Контейнер с плавной анимацией смены вкладок */}
+      {/* Контейнер с анимацией переключения страниц */}
       <Box sx={{ position: 'relative' }}>
         {currentTab === 'catalog' && (
           <Fade in={currentTab === 'catalog'} timeout={400}>
@@ -129,11 +156,9 @@ export function App() {
                 onLogin={(user) => {
                   setCurrentUser(user);
                   setToastMessage('Авторизация выполнена успешно');
+                  setCurrentTab('catalog');
                 }}
-                onLogout={() => {
-                  setCurrentUser(null);
-                  setToastMessage('Вы вышли из системы');
-                }}
+                onLogout={handleLogout}
               />
             </Box>
           </Fade>
