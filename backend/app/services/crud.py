@@ -167,8 +167,13 @@ def get_booking(db: Session, booking_id: int) -> Optional[Booking]:
 
 
 def get_bookings(db: Session, skip: int = 0, limit: int = 100) -> List[Booking]:
-    """Получение списка бронирований."""
+    """Получение общего списка бронирований."""
     return db.query(Booking).offset(skip).limit(limit).all()
+
+
+def get_user_bookings(db: Session, user_id: int) -> List[Booking]:
+    """Получение списка бронирований конкретного студента."""
+    return db.query(Booking).filter(Booking.user_id == user_id).order_by(Booking.start_time.desc()).all()
 
 
 def check_machine_overlap(
@@ -190,10 +195,10 @@ def check_machine_overlap(
     return query.first()
 
 
-def create_booking(db: Session, booking_in: BookingCreate) -> Booking:
-    """Создание бронирования слота."""
+def create_booking(db: Session, booking_in: BookingCreate, user_id: int) -> Booking:
+    """Создание бронирования слота с привязкой к конкретному пользователю."""
     booking = Booking(
-        user_id=booking_in.user_id,
+        user_id=user_id,
         machine_id=booking_in.machine_id,
         start_time=booking_in.start_time,
         end_time=booking_in.end_time,

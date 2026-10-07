@@ -3,9 +3,11 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
 from app.config import settings
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.database import get_db
+from app.models.entities import User
 from app.schemas.schemas import (
     UserRegister,
     UserLogin,
@@ -131,3 +133,9 @@ def refresh_access_token(refresh_in: TokenRefreshRequest, db: Session = Depends(
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
+
+
+@router.get("/me", response_model=UserResponse)
+def get_current_authenticated_user(current_user: User = Depends(get_current_user)):
+    """Получение профиля текущего авторизованного пользователя через access token."""
+    return current_user

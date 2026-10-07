@@ -139,7 +139,6 @@ class MachineResponse(MachineBase):
 # Схемы для бронирований (Booking)
 
 class BookingBase(BaseModel):
-    user_id: int = Field(..., gt=0, description="ID пользователя")
     machine_id: int = Field(..., gt=0, description="ID машины")
     start_time: datetime = Field(..., description="Время начала слота")
     end_time: datetime = Field(..., description="Время окончания слота")
@@ -169,7 +168,8 @@ class BookingBase(BaseModel):
 
 
 class BookingCreate(BookingBase):
-    pass
+    # user_id опционален в теле запроса, так как он берётся из JWT токена
+    user_id: Optional[int] = Field(None, gt=0, description="ID пользователя (подставляется сервером)")
 
 
 class BookingUpdate(BaseModel):
@@ -187,8 +187,13 @@ class BookingUpdate(BaseModel):
         return self
 
 
-class BookingResponse(BookingBase):
+class BookingResponse(BaseModel):
     id: int
+    user_id: int
+    machine_id: int
+    start_time: datetime
+    end_time: datetime
+    status: BookingStatus
     created_at: datetime
     user: Optional[UserResponse] = None
     machine: Optional[MachineResponse] = None
