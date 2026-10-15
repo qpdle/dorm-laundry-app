@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CssBaseline, Box, Snackbar, Alert, Fade } from '@mui/material';
 import { Navbar } from './shared/ui/Navbar';
 import { MachinesPage } from './pages/MachinesPage/MachinesPage';
@@ -19,13 +19,12 @@ export function App() {
   const [currentTab, setCurrentTab] = useState<string>('catalog');
   const [selectedMachine, setSelectedMachine] = useState<LaundryMachine | null>(null);
 
-  // Данные приложения из базы данных
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastSeverity, setToastSeverity] = useState<'success' | 'error'>('success');
 
-  // 1. Проверка сохранённого токена при входе на сайт
+  // Восстановление сессии при инициализации
   useEffect(() => {
     if (getAccessToken()) {
       fetchCurrentUser()
@@ -37,30 +36,39 @@ export function App() {
     }
   }, []);
 
-  // 2. Загрузка бронирований из базы данных
-  const loadBookings = () => {
-    if (currentTab === 'my-bookings' && currentUser) {
-      fetchMyBookings()
-        .then(setBookings)
-        .catch((err) => console.warn('Ошибка загрузки личных броней:', err));
-    } else {
-      fetchBookings()
-        .then(setBookings)
-        .catch((err) => console.warn('Ошибка загрузки расписания:', err));
+  // Синхронизация данных бронирований с PostgreSQL
+  const syncBookings = useCallback(async () => {
+    try {
+      if (currentTab === 'my-bookings' && currentUser) {
+        const myData = await fetchMyBookings();
+        setBookings(myData);
+      } else {
+        const allData = await fetchBookings();
+        setBookings(allData);
+      }
+    } catch (err) {
+      console.warn('Ошибка синхронизации данных с сервером:', err);
     }
-  };
-
-  useEffect(() => {
-    loadBookings();
   }, [currentTab, currentUser]);
 
-  // Выбор стиральной машины и открытие страницы расписания
-  const handleSelectMachine = (machine: LaundryMachine) => {
+  useEffect(() => {
+    syncBookings();
+  }, [syncBookings]);
+
+  // Выбор оборудования и актуализация расписания
+  const handleSelectMachine = async (machine: LaundryMachine) => {
     setSelectedMachine(machine);
+    // Принудительно подтягиваем актуальные брони с сервера перед открытием сетки
+    try {
+      const liveBookings = await fetchBookings();
+      setBookings(liveBookings);
+    } catch {
+      // Игнорируем фоновый сбой
+    }
     setCurrentTab('schedule');
   };
 
-  // Создание бронирования через API (POST /api/bookings/)
+  // Создание бронирования через API с мгновенной синхронизацией UI
   const handleBookSlot = async (machineId: number, startTime: string, endTime: string) => {
     if (!currentUser) {
       setToastSeverity('error');
@@ -77,8 +85,10 @@ export function App() {
       });
 
       setToastSeverity('success');
-      setToastMessage('Слот успешно забронирован в базе данных!');
-      loadBookings();
+      setToastMessage('Слот успешно забронирован!');
+      
+      // Актуализируем данные в интерфейсе
+      await syncBookings();
       setCurrentTab('my-bookings');
     } catch (err: unknown) {
       setToastSeverity('error');
@@ -86,27 +96,27 @@ export function App() {
     }
   };
 
-  // Удаление / отмена бронирования через API (DELETE /api/bookings/{id})
+  // Отмена бронирования через API с мгновенным обновлением UI
   const handleCancelBooking = async (bookingId: number) => {
     try {
       await deleteBookingApi(bookingId);
       setToastSeverity('success');
       setToastMessage('Бронирование успешно отменено');
-      loadBookings();
+      
+      // Мгновенно обновляем список
+      await syncBookings();
     } catch (err: unknown) {
       setToastSeverity('error');
       setToastMessage(err instanceof Error ? err.message : 'Ошибка отмены бронирования');
     }
   };
 
-  // Обновление состояния пользователя после редактирования
   const handleUserUpdated = (updatedUser: User) => {
     setCurrentUser(updatedUser);
     setToastSeverity('success');
     setToastMessage('Профиль успешно обновлён');
   };
 
-  // Выход из системы
   const handleLogout = async () => {
     const refreshToken = getRefreshToken();
     if (refreshToken) {
@@ -117,7 +127,7 @@ export function App() {
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
       } catch {
-        // локальный сброс даже при сбое сети
+        // локальный сброс
       }
     }
 
@@ -132,7 +142,6 @@ export function App() {
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <CssBaseline />
 
-      {/* Навигационная панель */}
       <Navbar
         currentTab={currentTab === 'schedule' ? 'catalog' : currentTab}
         onTabChange={(tab) => {
@@ -199,7 +208,6 @@ export function App() {
         )}
       </Box>
 
-      {/* Всплывающие уведомления */}
       <Snackbar
         open={Boolean(toastMessage)}
         autoHideDuration={4000}

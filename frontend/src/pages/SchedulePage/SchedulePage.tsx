@@ -14,7 +14,9 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import type { LaundryMachine, Booking } from '../../shared/types';
+import { formatTimeShort, formatDateRussian, isTimeOverlapping } from '../../shared/lib/formatters';
 
 interface TimeSlot {
   id: string;
@@ -30,26 +32,37 @@ interface SchedulePageProps {
   onBookSlot: (machineId: number, startTime: string, endTime: string) => void;
 }
 
+// Генерация согласованных слотов на текущий день с шагом в 2 часа
 const generateSlots = (machineId: number, bookings: Booking[]): TimeSlot[] => {
   const slots: TimeSlot[] = [];
   const hours = [8, 10, 12, 14, 16, 18, 20];
 
-  const today = new Date();
-  const dateStr = today.toISOString().split('T')[0];
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const dateBase = `${year}-${month}-${day}`;
 
   hours.forEach((hour) => {
-    const startHourStr = hour < 10 ? `0${hour}` : `${hour}`;
-    const endHourStr = hour + 2 < 10 ? `0${hour + 2}` : `${hour + 2}`;
+    const startHourStr = String(hour).padStart(2, '0');
+    const endHourStr = String(hour + 2).padStart(2, '0');
 
-    const startISO = `${dateStr}T${startHourStr}:00:00`;
-    const endISO = `${dateStr}T${endHourStr}:00:00`;
+    // Формируем строгий ISO-формат, согласованный с Pydantic BookingCreate
+    const startISO = `${dateBase}T${startHourStr}:00:00`;
+    const endISO = `${dateBase}T${endHourStr}:00:00`;
 
-    const isBooked = bookings.some(
-      (b) =>
-        b.machine_id === machineId &&
-        b.status === 'active' &&
-        b.start_time.startsWith(`${dateStr}T${startHourStr}`)
-    );
+    const slotStart = new Date(startISO);
+    const slotEnd = new Date(endISO);
+
+    // Точная сверка пересечений с активными бронированиями из PostgreSQL
+    const isBooked = bookings.some((b) => {
+      if (b.machine_id !== machineId || b.status !== 'active') {
+        return false;
+      }
+      const bStart = new Date(b.start_time);
+      const bEnd = new Date(b.end_time);
+      return isTimeOverlapping(slotStart, slotEnd, bStart, bEnd);
+    });
 
     slots.push({
       id: `${machineId}-${startHourStr}`,
@@ -72,6 +85,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
 
   const slots = generateSlots(machine.id, bookings);
+  const todayFormatted = formatDateRussian(new Date().toISOString());
 
   const handleOpenConfirm = (slot: TimeSlot) => {
     setSelectedSlot(slot);
@@ -108,13 +122,15 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
         <Typography variant="body1" color="text.secondary">
           Этаж {machine.floor} • {machine.machine_type === 'washer' ? 'Стиральная машина' : 'Сушилка'}
         </Typography>
+        <Typography variant="body2" color="primary" sx={{ mt: 0.5, fontWeight: 500 }}>
+          Дата: {todayFormatted}
+        </Typography>
       </Box>
 
       <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-        Доступные слоты на сегодня:
+        Слоты для бронирования (интервал 2 часа):
       </Typography>
 
-      {/* Адаптивная сетка слотов на Box без устаревших перегрузок Grid */}
       <Box
         sx={{
           display: 'grid',
@@ -123,8 +139,8 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
         }}
       >
         {slots.map((slot) => {
-          const startLabel = new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          const endLabel = new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const startLabel = formatTimeShort(slot.startTime);
+          const endLabel = formatTimeShort(slot.endTime);
 
           return (
             <Paper
@@ -136,7 +152,9 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                borderColor: slot.isBooked ? 'grey.300' : 'primary.light',
                 bgcolor: slot.isBooked ? 'action.hover' : 'background.paper',
+                transition: 'all 0.2s ease',
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -144,20 +162,27 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
                 <Typography
                   variant="body1"
                   sx={{
-                    fontWeight: 'medium',
+                    fontWeight: 500,
                     color: slot.isBooked ? 'text.disabled' : 'text.primary',
                   }}
                 >
-                  {startLabel} - {endLabel}
+                  {startLabel} – {endLabel}
                 </Typography>
               </Box>
 
               {slot.isBooked ? (
-                <Chip label="Занято" size="small" />
+                <Chip
+                  label="Занято"
+                  size="small"
+                  variant="outlined"
+                  color="default"
+                  sx={{ fontWeight: 500 }}
+                />
               ) : (
                 <Button
                   variant="contained"
                   size="small"
+                  startIcon={<CheckCircleIcon />}
                   onClick={() => handleOpenConfirm(slot)}
                 >
                   Занять
@@ -173,11 +198,10 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
         <DialogTitle>Подтверждение бронирования</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Вы уверены, что хотите забронировать <strong>{machine.name}</strong> на интервал{' '}
+            Вы бронируете оборудование <strong>{machine.name}</strong> на интервал{' '}
             {selectedSlot && (
               <strong>
-                {new Date(selectedSlot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -{' '}
-                {new Date(selectedSlot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {formatTimeShort(selectedSlot.startTime)} – {formatTimeShort(selectedSlot.endTime)}
               </strong>
             )}
             ?
@@ -195,3 +219,5 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
     </Container>
   );
 };
+
+export default SchedulePage;
