@@ -11,15 +11,22 @@ export async function request<T>(url: string, options: RequestOptions = {}): Pro
     headers.set('Content-Type', 'application/json');
   }
 
-  // Прикрепляем access token, если он есть в хранилище
+  // Прикрепляем токен авторизации
   const accessToken = getAccessToken();
   if (accessToken && !options.skipAuth) {
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  let response = await fetch(url, { ...options, headers });
+  let response: Response;
 
-  // Если токен истёк (401), пробуем автоматически продлить через refresh token
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch (netError) {
+    // Перехват физического отсутствия сети или падения сервера бэкенда
+    throw new Error('Не удалось связаться с сервером. Проверьте, запущен ли FastAPI (http://127.0.0.1:8000)');
+  }
+
+  // Если токен просрочен (401), пробуем продлить через refresh token
   if (response.status === 401 && !options.skipAuth) {
     const refreshToken = getRefreshToken();
     if (refreshToken) {
@@ -34,28 +41,51 @@ export async function request<T>(url: string, options: RequestOptions = {}): Pro
           const refreshData = await refreshResponse.json();
           saveTokens(refreshData.access_token, refreshToken);
 
-          // Повторяем исходный запрос с новым access токеном
           headers.set('Authorization', `Bearer ${refreshData.access_token}`);
           response = await fetch(url, { ...options, headers });
         } else {
           clearTokens();
+          throw new Error('Время вашей сессии истекло. Пожалуйста, выполните повторный вход.');
         }
       } catch {
         clearTokens();
+        throw new Error('Время вашей сессии истекло. Пожалуйста, выполните повторный вход.');
       }
+    } else {
+      throw new Error('Для выполнения этого действия необходима авторизация в системе.');
     }
   }
 
+  // Обработка статусных ошибок HTTP
   if (!response.ok) {
     let errorMessage = `Ошибка ${response.status}: ${response.statusText}`;
+
     try {
       const errorJson = await response.json();
       if (errorJson.detail) {
-        errorMessage = typeof errorJson.detail === 'string' ? errorJson.detail : JSON.stringify(errorJson.detail);
+        if (typeof errorJson.detail === 'string') {
+          errorMessage = errorJson.detail;
+        } else if (Array.isArray(errorJson.detail)) {
+          // Читаемый парсинг ошибок валидации Pydantic
+          errorMessage = errorJson.detail.map((d: { msg?: string }) => d.msg || 'Некорректные данные').join(', ');
+        } else {
+          errorMessage = JSON.stringify(errorJson.detail);
+        }
+      } else if (errorJson.message) {
+        errorMessage = errorJson.message;
       }
     } catch {
-      // Игнорируем ошибку чтения JSON
+      if (response.status === 403) {
+        errorMessage = 'Отказ в доступе: у вас недостаточно прав для выполнения этой операции.';
+      } else if (response.status === 404) {
+        errorMessage = 'Запрошенные данные не найдены на сервере.';
+      } else if (response.status === 409) {
+        errorMessage = 'Конфликт данных: выбранный интервал времени уже занят или ресурс существует.';
+      } else if (response.status >= 500) {
+        errorMessage = 'Внутренняя ошибка сервера. Повторите попытку позже.';
+      }
     }
+
     throw new Error(errorMessage);
   }
 

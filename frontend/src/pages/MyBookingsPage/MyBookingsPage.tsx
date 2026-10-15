@@ -1,19 +1,32 @@
 import React from 'react';
-import { Container, Typography, Box, Button } from '@mui/material';
-import EventBusyIcon from '@mui/icons-material/EventBusy';
+import { Container, Typography, Box, Button, Paper } from '@mui/material';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { BookingItem } from '../../entities/booking/BookingItem';
-import type { Booking } from '../../shared/types';
+import { LoadingState } from '../../shared/ui/LoadingState';
+import { ErrorState } from '../../shared/ui/ErrorState';
+import { EmptyState } from '../../shared/ui/EmptyState';
+import type { Booking, User } from '../../shared/types';
 
 interface MyBookingsPageProps {
   bookings: Booking[];
+  currentUser: User | null;
+  isLoading: boolean;
+  errorMessage: string | null;
+  onRetry: () => void;
   onCancelBooking: (bookingId: number) => void;
   onGoToCatalog: () => void;
+  onGoToLogin: () => void;
 }
 
 export const MyBookingsPage: React.FC<MyBookingsPageProps> = ({
   bookings,
+  currentUser,
+  isLoading,
+  errorMessage,
+  onRetry,
   onCancelBooking,
   onGoToCatalog,
+  onGoToLogin,
 }) => {
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -26,28 +39,69 @@ export const MyBookingsPage: React.FC<MyBookingsPageProps> = ({
         </Typography>
       </Box>
 
-      {bookings.length === 0 ? (
-        <Box
+      {/* Если пользователь не авторизован - требуем вход */}
+      {!currentUser && (
+        <Paper
+          variant="outlined"
           sx={{
-            py: 8,
+            py: 6,
+            px: 3,
+            borderRadius: 3,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             textAlign: 'center',
           }}
         >
-          <EventBusyIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom>
-            У вас пока нет активных бронирований
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: '50%',
+              bgcolor: 'action.hover',
+              color: 'text.secondary',
+              mb: 2,
+            }}
+          >
+            <LockOutlinedIcon sx={{ fontSize: 40 }} />
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+            Требуется авторизация
           </Typography>
-          <Typography variant="body2" color="text.disabled" sx={{ mb: 3 }}>
-            Выберите свободную стиральную или сушильную машину в каталоге.
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 420 }}>
+            Чтобы просматривать личные записи и управлять ими, войдите в систему под своим студенческим аккаунтом.
           </Typography>
-          <Button variant="contained" onClick={onGoToCatalog}>
-            Перейти к выбору техники
+          <Button variant="contained" onClick={onGoToLogin}>
+            Войти в систему
           </Button>
-        </Box>
-      ) : (
+        </Paper>
+      )}
+
+      {/* Состояние ошибки загрузки с кнопкой повтора */}
+      {currentUser && errorMessage && (
+        <ErrorState
+          title="Сбой загрузки бронирований"
+          message={errorMessage}
+          onRetry={onRetry}
+        />
+      )}
+
+      {/* Индикатор загрузки для авторизованного пользователя */}
+      {currentUser && isLoading && !errorMessage && (
+        <LoadingState message="Синхронизация списка ваших бронирований с базой данных..." />
+      )}
+
+      {/* Пустой список бронирований */}
+      {currentUser && !isLoading && !errorMessage && bookings.length === 0 && (
+        <EmptyState
+          title="У вас пока нет активных бронирований"
+          description="Выберите свободную стиральную или сушильную машину в каталоге и забронируйте удобный интервал."
+          actionText="Перейти к выбору техники"
+          onAction={onGoToCatalog}
+        />
+      )}
+
+      {/* Карточки бронирований студента */}
+      {currentUser && !isLoading && !errorMessage && bookings.length > 0 && (
         <Box>
           {bookings.map((booking) => (
             <BookingItem
@@ -61,3 +115,5 @@ export const MyBookingsPage: React.FC<MyBookingsPageProps> = ({
     </Container>
   );
 };
+
+export default MyBookingsPage;

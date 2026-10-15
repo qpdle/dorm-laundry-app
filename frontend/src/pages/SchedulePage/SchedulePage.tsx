@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  CircularProgress,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -29,10 +30,9 @@ interface SchedulePageProps {
   machine: LaundryMachine;
   bookings: Booking[];
   onBack: () => void;
-  onBookSlot: (machineId: number, startTime: string, endTime: string) => void;
+  onBookSlot: (machineId: number, startTime: string, endTime: string) => Promise<void>;
 }
 
-// Генерация согласованных слотов на текущий день с шагом в 2 часа
 const generateSlots = (machineId: number, bookings: Booking[]): TimeSlot[] => {
   const slots: TimeSlot[] = [];
   const hours = [8, 10, 12, 14, 16, 18, 20];
@@ -47,14 +47,12 @@ const generateSlots = (machineId: number, bookings: Booking[]): TimeSlot[] => {
     const startHourStr = String(hour).padStart(2, '0');
     const endHourStr = String(hour + 2).padStart(2, '0');
 
-    // Формируем строгий ISO-формат, согласованный с Pydantic BookingCreate
     const startISO = `${dateBase}T${startHourStr}:00:00`;
     const endISO = `${dateBase}T${endHourStr}:00:00`;
 
     const slotStart = new Date(startISO);
     const slotEnd = new Date(endISO);
 
-    // Точная сверка пересечений с активными бронированиями из PostgreSQL
     const isBooked = bookings.some((b) => {
       if (b.machine_id !== machineId || b.status !== 'active') {
         return false;
@@ -83,6 +81,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
 }) => {
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const slots = generateSlots(machine.id, bookings);
   const todayFormatted = formatDateRussian(new Date().toISOString());
@@ -93,14 +92,21 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
   };
 
   const handleCloseConfirm = () => {
+    if (isSubmitting) return;
     setIsDialogOpen(false);
     setSelectedSlot(null);
   };
 
-  const handleConfirmBooking = () => {
-    if (selectedSlot) {
-      onBookSlot(machine.id, selectedSlot.startTime, selectedSlot.endTime);
-      handleCloseConfirm();
+  const handleConfirmBooking = async () => {
+    if (!selectedSlot) return;
+
+    setIsSubmitting(true);
+    try {
+      await onBookSlot(machine.id, selectedSlot.startTime, selectedSlot.endTime);
+      setIsDialogOpen(false);
+      setSelectedSlot(null);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -111,6 +117,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
         onClick={onBack}
         variant="text"
         sx={{ mb: 2 }}
+        disabled={isSubmitting}
       >
         Назад к каталогу
       </Button>
@@ -193,7 +200,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
         })}
       </Box>
 
-      {/* Диалог подтверждения бронирования */}
+      {/* Диалог подтверждения с индикацией ожидания */}
       <Dialog open={isDialogOpen} onClose={handleCloseConfirm}>
         <DialogTitle>Подтверждение бронирования</DialogTitle>
         <DialogContent>
@@ -207,12 +214,18 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({
             ?
           </DialogContentText>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseConfirm} color="inherit">
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={handleCloseConfirm} color="inherit" disabled={isSubmitting}>
             Отмена
           </Button>
-          <Button onClick={handleConfirmBooking} variant="contained" autoFocus>
-            Подтвердить
+          <Button
+            onClick={handleConfirmBooking}
+            variant="contained"
+            disabled={isSubmitting}
+            startIcon={isSubmitting ? <CircularProgress size={18} color="inherit" /> : undefined}
+            autoFocus
+          >
+            {isSubmitting ? 'Бронирование...' : 'Подтвердить'}
           </Button>
         </DialogActions>
       </Dialog>
