@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CssBaseline, Box, Snackbar, Alert, Fade } from '@mui/material';
 import { Navbar } from './shared/ui/Navbar';
 import { MachinesPage } from './pages/MachinesPage/MachinesPage';
@@ -6,41 +6,46 @@ import { SchedulePage } from './pages/SchedulePage/SchedulePage';
 import { MyBookingsPage } from './pages/MyBookingsPage/MyBookingsPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
 import type { LaundryMachine, Booking, User } from './shared/types';
-import { getRefreshToken, clearTokens } from './shared/lib/authStorage';
+import { getRefreshToken, getAccessToken, clearTokens } from './shared/lib/authStorage';
+import { fetchBookings, fetchMyBookings, fetchCurrentUser } from './shared/api/laundryApi';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<string>('catalog');
   const [selectedMachine, setSelectedMachine] = useState<LaundryMachine | null>(null);
 
-  const [currentUser, setCurrentUser] = useState<User | null>({
-    id: 1,
-    full_name: 'Даниил Орлов',
-    room_number: '314-А',
-    telegram_id: '@orlov_daniil',
-    created_at: new Date().toISOString(),
-  });
-
-  const [bookings, setBookings] = useState<Booking[]>([
-    {
-      id: 101,
-      user_id: 1,
-      machine_id: 1,
-      start_time: `${new Date().toISOString().split('T')[0]}T10:00:00`,
-      end_time: `${new Date().toISOString().split('T')[0]}T12:00:00`,
-      status: 'active',
-      created_at: new Date().toISOString(),
-      machine: {
-        id: 1,
-        name: 'Стиральная машина №1',
-        machine_type: 'washer',
-        floor: 1,
-        status: 'available',
-        created_at: new Date().toISOString(),
-      },
-    },
-  ]);
-
+  // Данные пользователя и бронирований, синхронизируемые с базой данных
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // 1. Проверяем сохранённый токен при загрузке приложения и восстанавливаем пользователя
+  useEffect(() => {
+    if (getAccessToken()) {
+      fetchCurrentUser()
+        .then((user) => setCurrentUser(user))
+        .catch(() => {
+          clearTokens();
+          setCurrentUser(null);
+        });
+    }
+  }, []);
+
+  // 2. Получение актуальных бронирований из базы данных
+  const loadBookings = () => {
+    if (currentTab === 'my-bookings' && currentUser) {
+      fetchMyBookings()
+        .then(setBookings)
+        .catch((err) => console.warn('Не удалось загрузить бронирования пользователя:', err));
+    } else {
+      fetchBookings()
+        .then(setBookings)
+        .catch((err) => console.warn('Не удалось загрузить общее расписание:', err));
+    }
+  };
+
+  useEffect(() => {
+    loadBookings();
+  }, [currentTab, currentUser]);
 
   // Выбор стиральной машины и открытие страницы расписания
   const handleSelectMachine = (machine: LaundryMachine) => {
@@ -48,25 +53,14 @@ export function App() {
     setCurrentTab('schedule');
   };
 
-  // Бронирование слота
-  const handleBookSlot = (machineId: number, startTime: string, endTime: string) => {
-    const newBooking: Booking = {
-      id: Date.now(),
-      user_id: currentUser ? currentUser.id : 1,
-      machine_id: machineId,
-      start_time: startTime,
-      end_time: endTime,
-      status: 'active',
-      created_at: new Date().toISOString(),
-      machine: selectedMachine || undefined,
-    };
-
-    setBookings((prev) => [newBooking, ...prev]);
+  // Локальный обработчик успешного бронирования слота
+  const handleBookSlot = (_machineId: number, startTime: string, _endTime: string) => {
+    loadBookings();
     setToastMessage(`Слот успешно забронирован на ${new Date(startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}!`);
     setCurrentTab('my-bookings');
   };
 
-  // Отмена бронирования
+  // Локальный обработчик отмены бронирования
   const handleCancelBooking = (bookingId: number) => {
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' as const } : b))
@@ -74,7 +68,7 @@ export function App() {
     setToastMessage('Бронирование отменено');
   };
 
-  // Выход из системы: отзыв токена на сервере, очистка хранилища и сброс состояния пользователя
+  // Выход из системы с отзывом токена
   const handleLogout = async () => {
     const refreshToken = getRefreshToken();
     if (refreshToken) {

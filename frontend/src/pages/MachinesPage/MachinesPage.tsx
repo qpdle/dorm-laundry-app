@@ -1,18 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Typography, Box, Button, Grow } from '@mui/material';
+import { Container, Typography, Box, Grow } from '@mui/material';
 import { MachineCard } from '../../entities/machine/MachineCard';
 import { MachineFilters } from '../../features/filter-machines/MachineFilters';
 import { LoadingState } from '../../shared/ui/LoadingState';
 import { ErrorState } from '../../shared/ui/ErrorState';
 import { EmptyState } from '../../shared/ui/EmptyState';
 import type { LaundryMachine } from '../../shared/types';
-
-const mockMachines: LaundryMachine[] = [
-  { id: 1, name: 'Стиральная машина №1', machine_type: 'washer', floor: 1, status: 'available', created_at: new Date().toISOString() },
-  { id: 2, name: 'Стиральная машина №2', machine_type: 'washer', floor: 1, status: 'in_use', created_at: new Date().toISOString() },
-  { id: 3, name: 'Сушилка Bosch №1', machine_type: 'dryer', floor: 2, status: 'available', created_at: new Date().toISOString() },
-  { id: 4, name: 'Сушилка LG №2', machine_type: 'dryer', floor: 2, status: 'maintenance', created_at: new Date().toISOString() },
-];
+import { fetchMachines } from '../../shared/api/laundryApi';
 
 interface MachinesPageProps {
   onSelectMachine: (machine: LaundryMachine) => void;
@@ -26,19 +20,20 @@ export const MachinesPage: React.FC<MachinesPageProps> = ({ onSelectMachine }) =
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [floorFilter, setFloorFilter] = useState<number | 'all'>('all');
 
-  const loadMachinesData = (simulateError: boolean = false) => {
+  const loadMachinesData = async () => {
     setIsLoading(true);
     setErrorMessage(null);
 
-    setTimeout(() => {
-      if (simulateError) {
-        setErrorMessage('Не удалось связаться с сервером базы данных (PostgreSQL). Проверьте работу backend.');
-        setIsLoading(false);
-      } else {
-        setMachines(mockMachines);
-        setIsLoading(false);
-      }
-    }, 600);
+    try {
+      // Реальный сетевой запрос к базе данных PostgreSQL через FastAPI
+      const data = await fetchMachines();
+      setMachines(data);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Не удалось связаться с сервером базы данных (PostgreSQL). Проверьте работу backend.';
+      setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -58,36 +53,25 @@ export const MachinesPage: React.FC<MachinesPageProps> = ({ onSelectMachine }) =
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-            Оборудование прачечной
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Выберите доступную стиральную или сушильную машину для бронирования слота.
-          </Typography>
-        </Box>
-
-        <Button
-          variant="outlined"
-          color="warning"
-          size="small"
-          onClick={() => loadMachinesData(true)}
-        >
-          Симулировать сбой сети
-        </Button>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
+          Оборудование прачечной
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Выберите доступную стиральную или сушильную машину для бронирования слота.
+        </Typography>
       </Box>
 
       {/* 1. Состояние ошибки */}
       {errorMessage && (
         <ErrorState
           message={errorMessage}
-          onRetry={() => loadMachinesData(false)}
+          onRetry={loadMachinesData}
         />
       )}
 
       {/* 2. Состояние загрузки */}
-      {isLoading && <LoadingState message="Получение актуального статуса оборудования..." />}
+      {isLoading && <LoadingState message="Получение актуального списка оборудования из базы данных..." />}
 
       {/* 3. Каталог машин */}
       {!isLoading && !errorMessage && (
