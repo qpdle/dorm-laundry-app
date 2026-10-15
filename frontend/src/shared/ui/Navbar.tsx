@@ -11,8 +11,8 @@ import {
 } from '@mui/material';
 import LocalLaundryServiceIcon from '@mui/icons-material/LocalLaundryService';
 import LogoutIcon from '@mui/icons-material/Logout';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 
-// Описываем интерфейс пользователя прямо здесь, чтобы исключить ошибки импорта путей
 interface NavbarUser {
   id?: number;
   full_name: string;
@@ -83,12 +83,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             </Button>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             {currentUser ? (
               <>
-                <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
-                  {currentUser.full_name} ({currentUser.telegram_id || 'Студент'})
-                </Typography>
+                {/* Кликабельная кнопка профиля студента */}
+                <Button
+                  onClick={() => onTabChange('login')}
+                  startIcon={<AccountCircleIcon />}
+                  sx={{
+                    color: 'white',
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    px: 1.5,
+                    backgroundColor: currentTab === 'login' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                    '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.25)' },
+                  }}
+                >
+                  {currentUser.full_name} ({currentUser.telegram_id || 'Профиль'})
+                </Button>
+
                 {onLogout && (
                   <Tooltip title="Выйти из аккаунта">
                     <IconButton

@@ -7,18 +7,25 @@ import { MyBookingsPage } from './pages/MyBookingsPage/MyBookingsPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
 import type { LaundryMachine, Booking, User } from './shared/types';
 import { getRefreshToken, getAccessToken, clearTokens } from './shared/lib/authStorage';
-import { fetchBookings, fetchMyBookings, fetchCurrentUser } from './shared/api/laundryApi';
+import {
+  fetchBookings,
+  fetchMyBookings,
+  fetchCurrentUser,
+  createBookingApi,
+  deleteBookingApi,
+} from './shared/api/laundryApi';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<string>('catalog');
   const [selectedMachine, setSelectedMachine] = useState<LaundryMachine | null>(null);
 
-  // Данные пользователя и бронирований, синхронизируемые с базой данных
+  // Данные приложения из базы данных
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastSeverity, setToastSeverity] = useState<'success' | 'error'>('success');
 
-  // 1. Проверяем сохранённый токен при загрузке приложения и восстанавливаем пользователя
+  // 1. Проверка сохранённого токена при входе на сайт
   useEffect(() => {
     if (getAccessToken()) {
       fetchCurrentUser()
@@ -30,16 +37,16 @@ export function App() {
     }
   }, []);
 
-  // 2. Получение актуальных бронирований из базы данных
+  // 2. Загрузка бронирований из базы данных
   const loadBookings = () => {
     if (currentTab === 'my-bookings' && currentUser) {
       fetchMyBookings()
         .then(setBookings)
-        .catch((err) => console.warn('Не удалось загрузить бронирования пользователя:', err));
+        .catch((err) => console.warn('Ошибка загрузки личных броней:', err));
     } else {
       fetchBookings()
         .then(setBookings)
-        .catch((err) => console.warn('Не удалось загрузить общее расписание:', err));
+        .catch((err) => console.warn('Ошибка загрузки расписания:', err));
     }
   };
 
@@ -53,22 +60,53 @@ export function App() {
     setCurrentTab('schedule');
   };
 
-  // Локальный обработчик успешного бронирования слота
-  const handleBookSlot = (_machineId: number, startTime: string, _endTime: string) => {
-    loadBookings();
-    setToastMessage(`Слот успешно забронирован на ${new Date(startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}!`);
-    setCurrentTab('my-bookings');
+  // Создание бронирования через API (POST /api/bookings/)
+  const handleBookSlot = async (machineId: number, startTime: string, endTime: string) => {
+    if (!currentUser) {
+      setToastSeverity('error');
+      setToastMessage('Для бронирования необходимо войти в систему');
+      setCurrentTab('login');
+      return;
+    }
+
+    try {
+      await createBookingApi({
+        machine_id: machineId,
+        start_time: startTime,
+        end_time: endTime,
+      });
+
+      setToastSeverity('success');
+      setToastMessage('Слот успешно забронирован в базе данных!');
+      loadBookings();
+      setCurrentTab('my-bookings');
+    } catch (err: unknown) {
+      setToastSeverity('error');
+      setToastMessage(err instanceof Error ? err.message : 'Не удалось забронировать слот');
+    }
   };
 
-  // Локальный обработчик отмены бронирования
-  const handleCancelBooking = (bookingId: number) => {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' as const } : b))
-    );
-    setToastMessage('Бронирование отменено');
+  // Удаление / отмена бронирования через API (DELETE /api/bookings/{id})
+  const handleCancelBooking = async (bookingId: number) => {
+    try {
+      await deleteBookingApi(bookingId);
+      setToastSeverity('success');
+      setToastMessage('Бронирование успешно отменено');
+      loadBookings();
+    } catch (err: unknown) {
+      setToastSeverity('error');
+      setToastMessage(err instanceof Error ? err.message : 'Ошибка отмены бронирования');
+    }
   };
 
-  // Выход из системы с отзывом токена
+  // Обновление состояния пользователя после редактирования
+  const handleUserUpdated = (updatedUser: User) => {
+    setCurrentUser(updatedUser);
+    setToastSeverity('success');
+    setToastMessage('Профиль успешно обновлён');
+  };
+
+  // Выход из системы
   const handleLogout = async () => {
     const refreshToken = getRefreshToken();
     if (refreshToken) {
@@ -78,13 +116,14 @@ export function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
-      } catch (error) {
-        console.warn('Сервер недоступен при выходе, сессия завершена локально', error);
+      } catch {
+        // локальный сброс даже при сбое сети
       }
     }
 
     clearTokens();
     setCurrentUser(null);
+    setToastSeverity('success');
     setToastMessage('Вы успешно вышли из системы');
     setCurrentTab('login');
   };
@@ -104,7 +143,6 @@ export function App() {
         onLogout={handleLogout}
       />
 
-      {/* Контейнер с анимацией переключения страниц */}
       <Box sx={{ position: 'relative' }}>
         {currentTab === 'catalog' && (
           <Fade in={currentTab === 'catalog'} timeout={400}>
@@ -149,24 +187,30 @@ export function App() {
                 currentUser={currentUser}
                 onLogin={(user) => {
                   setCurrentUser(user);
+                  setToastSeverity('success');
                   setToastMessage('Авторизация выполнена успешно');
                   setCurrentTab('catalog');
                 }}
                 onLogout={handleLogout}
+                onUpdateUser={handleUserUpdated}
               />
             </Box>
           </Fade>
         )}
       </Box>
 
-      {/* Всплывающее уведомление */}
+      {/* Всплывающие уведомления */}
       <Snackbar
         open={Boolean(toastMessage)}
         autoHideDuration={4000}
         onClose={() => setToastMessage(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={() => setToastMessage(null)} severity="success" sx={{ width: '100%' }}>
+        <Alert
+          onClose={() => setToastMessage(null)}
+          severity={toastSeverity}
+          sx={{ width: '100%' }}
+        >
           {toastMessage}
         </Alert>
       </Snackbar>
